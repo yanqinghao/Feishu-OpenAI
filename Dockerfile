@@ -18,8 +18,11 @@ COPY ./code/role_list.yaml /app
 COPY ./pycode /app
 COPY ./utils/xray /usr/bin/xray
 COPY ./utils/config.json /etc/xray/config.json
+COPY ./utils/start.sh /app/start.sh
 
 RUN chmod +x /usr/bin/xray && \
+    chmod +x /app/feishu_chatgpt && \
+    chmod +x /app/start.sh && \
     pip config set global.index-url https://pypi.mirrors.ustc.edu.cn/simple && \
     pip install --upgrade pip && \
     pip install -r requirements.txt && \
@@ -32,4 +35,4 @@ RUN chmod +x /usr/bin/xray && \
     rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 EXPOSE 9000
-ENTRYPOINT ["/app/feishu_chatgpt"]
+ENTRYPOINT ["/app/start.sh"]
