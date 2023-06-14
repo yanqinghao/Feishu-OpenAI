@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+openai>=0.26.5
+httpx[socks]
+openai
+OpenAIAuth==1.0.2
+prompt-toolkit
+requests[socks]
+tiktoken>=0.3.0
