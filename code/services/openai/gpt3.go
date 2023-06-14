@@ -84,7 +84,8 @@ func (gpt *ChatGPT) Completions(msg []Messages, aiMode AIMode) (resp Messages,
 		PresencePenalty:  0,
 	}
 	gptResponseBody := &ChatGPTResponseBody{}
-	url := gpt.FullUrl("chat/completions")
+	// url := gpt.FullUrl("chat/completions")
+	url := "http://127.0.0.1:5000/chat/completions"
 	//fmt.Println(url)
 	if url == "" {
 		return resp, errors.New("无法获取openai请求地址")
