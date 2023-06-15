@@ -39,7 +39,7 @@ async def updateModel():
     chatbot.config["model"] = os.environ.get("MODEL")
     print("更新模型为ChatGPT-4", flush=True)
 
-openai.api_key = os.environ.get('OPENAI_API_KEY')
+openai.api_key = os.environ.get('OPENAI_KEY')
 openai.proxy = {
     'http': os.environ.get("PROXY"),
     'https': os.environ.get("PROXY"),
@@ -105,6 +105,7 @@ async def makeRevChatGPTRequest(prompt):
         message = data["message"]
 
     await chatbot.delete_conversation(convo_id=data["conversation_id"])
+    model = "gpt4" if chatbot.config["model"] == "gpt-4" else "gpt3.5"
     return {
             "id": "chatcmpl-123",
             "object": "chat.completion",
@@ -114,7 +115,7 @@ async def makeRevChatGPTRequest(prompt):
                 "index": 0,
                 "message": {
                 "role": "assistant",
-                "content": message,
+                "content": f"{message}[由{model}生成]",
                 },
                 "finish_reason": "stop"
             }],
@@ -127,7 +128,7 @@ async def makeRevChatGPTRequest(prompt):
 
 
 async def makeChatGPTAPIRequest(req):
-    return await openai.ChatCompletion.acreate(
+    respond = await openai.ChatCompletion.acreate(
             model=req.model,
             messages=req.messages,
             max_tokens=req.max_tokens,
@@ -136,3 +137,5 @@ async def makeChatGPTAPIRequest(req):
             frequency_penalty=req.frequency_penalty,
             presence_penalty=req.presence_penalty,
         )
+    respond["choices"][0]["message"]["content"] += f"[由{req.model}付费生成]"
+    return respond
