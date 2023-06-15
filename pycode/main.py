@@ -70,6 +70,9 @@ async def makeRequest(req, maxRetry):
                 chatbot.config["model"] = "text-davinci-002-render-sha"
                 asyncio.create_task(updateModel())
                 return await makeRequest(req, maxRetry)
+            else:
+                print(f"接口请求异常: {e}", flush=True)
+                return await makeRequest(req, maxRetry)
     else:
         try:
             return await makeChatGPTAPIRequest(req)
@@ -100,6 +103,7 @@ async def makeRevChatGPTRequest(prompt):
         prompt,
     ):
         message = data["message"]
+
     await chatbot.delete_conversation(convo_id=data["conversation_id"])
     return {
             "id": "chatcmpl-123",
