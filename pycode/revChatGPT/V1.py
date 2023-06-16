@@ -197,6 +197,16 @@ class Chatbot:
         if self.config.get("PUID"):
             self.session.cookies.set("_puid", self.config["PUID"])
 
+        if self.config.get("plugin_ids", []):
+            for plugin in self.config.get("plugin_ids"):
+                self.install_plugin(plugin)
+        if self.config.get("unverified_plugin_domains", []):
+            for domain in self.config.get("unverified_plugin_domains"):
+                if self.config.get("plugin_ids"):
+                    self.config["plugin_ids"].append(self.get_unverified_plugin(domain,install=True).get("id"))
+                else:
+                    self.config["plugin_ids"] = [self.get_unverified_plugin(domain,install=True).get("id")]
+
     @logger(is_timed=True)
     def __check_credentials(self) -> None:
         """Check login info and perform login
@@ -759,6 +769,8 @@ class Chatbot:
         Creates a share link to a conversation
         :param convo_id: UUID of conversation
         :param node_id: UUID of node
+        :param anonymous: Boolean
+        :param title: String
 
         Returns:
             str: A URL to the shared link
@@ -799,6 +811,8 @@ class Chatbot:
     def gen_title(self, convo_id: str, message_id: str) -> str:
         """
         Generate title for conversation
+        :param id: UUID of conversation
+        :param message_id: UUID of message
         """
         response = self.session.post(
             f"{self.base_url}conversation/gen_title/{convo_id}",
@@ -869,6 +883,12 @@ class Chatbot:
 
     @logger(is_timed=True)
     def get_plugins(self, offset: int = 0, limit: int = 250, status: str = "approved"):
+        """
+        Get plugins
+        :param offset: Integer. Offset (Only supports 0)
+        :param limit: Integer. Limit (Only below 250)
+        :param status: String. Status of plugin (approved)
+        """
         url = f"{self.base_url}aip/p?offset={offset}&limit={limit}&statuses={status}"
         response = self.session.get(url)
         self.__check_response(response)
@@ -877,10 +897,28 @@ class Chatbot:
 
     @logger(is_timed=True)
     def install_plugin(self, plugin_id: str):
+        """
+        Install plugin by ID
+        :param plugin_id: String. ID of plugin
+        """
         url = f"{self.base_url}aip/p/{plugin_id}/user-settings"
         payload = {"is_installed": True}
         response = self.session.patch(url, data=json.dumps(payload))
         self.__check_response(response)
+
+    @logger(is_timed=True)
+    def get_unverified_plugin(self, domain: str, install: bool = True) -> dict:
+        """
+        Get unverified plugin by domain
+        :param domain: String. Domain of plugin
+        :param install: Boolean. Install plugin if found
+        """
+        url = f"{self.base_url}aip/p/domain?domain={domain}"
+        response = self.session.get(url)
+        self.__check_response(response)
+        if install:
+            self.install_plugin(response.json().get("id"))
+        return response.json()
 
 
 class AsyncChatbot(Chatbot):
