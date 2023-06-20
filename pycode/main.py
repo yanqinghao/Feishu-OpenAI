@@ -65,17 +65,14 @@ async def makeRequest(req, maxRetry):
             return await makeRevChatGPTRequest(prompt)
         except Exception as e:
             if "Incorrect API key" in str(e) or "invalid_api_key" in str(e):
-                await asyncio.sleep(60)
                 chatbot.__check_credentials()
                 return await makeRequest(req, maxRetry)
             elif "You have sent too many messages to the model. Please try again later." in str(e):
                 chatbot.config["model"] = "text-davinci-002-render-sha"
                 asyncio.create_task(updateModel())
-                await asyncio.sleep(60)
                 return await makeRequest(req, maxRetry)
             else:
                 print(f"接口请求异常: {e}", flush=True)
-                await asyncio.sleep(60)
                 return await makeRequest(req, maxRetry)
     else:
         try:
