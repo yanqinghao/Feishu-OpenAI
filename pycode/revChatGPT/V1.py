@@ -957,7 +957,11 @@ class AsyncChatbot(Chatbot):
         )
 
         # overwrite inherited normal session with async
-        self.session = AsyncClient(headers=self.session.headers)
+        proxies = {
+            "http://": self.config["proxy"],
+            "https://": self.config["proxy"],
+        }
+        self.session = AsyncClient(headers=self.session.headers, proxies=proxies)
 
     async def __arkose_token(self) -> str:
         headers = {
