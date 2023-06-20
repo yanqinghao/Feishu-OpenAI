@@ -20,7 +20,8 @@ initConfig = {
     "email": os.environ.get("EMAIL"),
     "password": os.environ.get("PASSWORD"),
     "proxy": os.environ.get("PROXY"),
-    "model": os.environ.get("MODEL"),   # gpt-4 gpt-4-browsing text-davinci-002-render-sha gpt-3.5-turbo
+    "model": os.environ.get("MODEL"),   # gpt-4 gpt-4-browsing text-davinci-002-render-sha gpt-3.5-
+    "disable_history": True
 }
 
 chatbot = AsyncChatbot(config=initConfig)
@@ -64,14 +65,17 @@ async def makeRequest(req, maxRetry):
             return await makeRevChatGPTRequest(prompt)
         except Exception as e:
             if "Incorrect API key" in str(e) or "invalid_api_key" in str(e):
+                await asyncio.sleep(60)
                 chatbot.__check_credentials()
                 return await makeRequest(req, maxRetry)
             elif "You have sent too many messages to the model. Please try again later." in str(e):
                 chatbot.config["model"] = "text-davinci-002-render-sha"
                 asyncio.create_task(updateModel())
+                await asyncio.sleep(60)
                 return await makeRequest(req, maxRetry)
             else:
                 print(f"接口请求异常: {e}", flush=True)
+                await asyncio.sleep(60)
                 return await makeRequest(req, maxRetry)
     else:
         try:
@@ -103,9 +107,8 @@ async def makeRevChatGPTRequest(prompt):
         prompt,
     ):
         message = data["message"]
-
-    await chatbot.delete_conversation(convo_id=data["conversation_id"])
-    model = "gpt4" if chatbot.config["model"] == "gpt-4" else "gpt3.5"
+    # await chatbot.delete_conversation(convo_id=data["conversation_id"])
+    model = "gpt4" if chatbot.config["model"] in ["gpt-4", "gpt-4-mobile"] else "gpt3.5"
     return {
             "id": "chatcmpl-123",
             "object": "chat.completion",
