@@ -23,6 +23,8 @@ import httpx
 import requests
 from httpx import AsyncClient
 from OpenAIAuth import Auth0 as Authenticator
+from rich.live import Live
+from rich.markdown import Markdown
 
 from . import __version__
 from . import typings as t
@@ -203,9 +205,13 @@ class Chatbot:
         if self.config.get("unverified_plugin_domains", []):
             for domain in self.config.get("unverified_plugin_domains"):
                 if self.config.get("plugin_ids"):
-                    self.config["plugin_ids"].append(self.get_unverified_plugin(domain,install=True).get("id"))
+                    self.config["plugin_ids"].append(
+                        self.get_unverified_plugin(domain, install=True).get("id"),
+                    )
                 else:
-                    self.config["plugin_ids"] = [self.get_unverified_plugin(domain,install=True).get("id")]
+                    self.config["plugin_ids"] = [
+                        self.get_unverified_plugin(domain, install=True).get("id"),
+                    ]
 
     @logger(is_timed=True)
     def __check_credentials(self) -> None:
@@ -361,6 +367,18 @@ class Chatbot:
 
         self.set_access_token(auth.auth())
 
+    def __arkose_token(self) -> str:
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        }
+        form_data = "public_key=35536E1E-65B4-4D96-9D97-6ADB7EFF8147&site=https%3A%2F%2Fchat.openai.com&userbrowser=Mozilla%2F5.0%20(X11%3B%20Linux%20x86_64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F114.0.0.0%20Safari%2F537.36&capi_version=1.5.2&capi_mode=lightbox&style_theme=default&rnd=0.3649022041957759"
+        url = "https://tcr9i.chat.openai.com/fc/gt2/public_key/35536E1E-65B4-4D96-9D97-6ADB7EFF8147"
+        response = self.session.post(url, data=form_data, headers=headers)
+        self.__check_response(response)
+        return response.json()["token"]
+
     @logger(is_timed=True)
     def __send_request(
         self,
@@ -372,7 +390,10 @@ class Chatbot:
         log.debug("Sending the payload")
 
         cid, pid = data["conversation_id"], data["parent_message_id"]
-        model, message = None, ""
+        message = ""
+
+        if data.get("model", "").startswith("gpt-4"):
+            data["arkose_token"] = self.__arkose_token()
 
         self.conversation_id_prev_queue.append(cid)
         self.parent_id_prev_queue.append(pid)
@@ -456,6 +477,7 @@ class Chatbot:
         message = message.strip("\n")
         for i in self.continue_write(
             conversation_id=cid,
+            model=model,
             timeout=timeout,
             auto_continue=False,
         ):
@@ -542,10 +564,6 @@ class Chatbot:
             "model": model,
             "history_and_training_disabled": self.disable_history,
         }
-        if model.startswith("gpt-4"):
-            data[
-                "arkose_token"
-            ] = f"{generate_random_hex()}|r=ap-southeast-1|meta=3|meta_width=300|metabgclr=transparent|metaiconclr=%23555555|guitextcolor=%23000000|pk=35536E1E-65B4-4D96-9D97-6ADB7EFF8147|at=40|sup=1|rid={random_int(1,99)}|ag=101|cdn_url=https%3A%2F%2Ftcr9i.chat.openai.com%2Fcdn%2Ffc|lurl=https%3A%2F%2Faudio-ap-southeast-1.arkoselabs.com|surl=https%3A%2F%2Ftcr9i.chat.openai.com|smurl=https%3A%2F%2Ftcr9i.chat.openai.com%2Fcdn%2Ffc%2Fassets%2Fstyle-manager"
         plugin_ids = self.config.get("plugin_ids", []) or plugin_ids
         if len(plugin_ids) > 0 and not conversation_id:
             data["plugin_ids"] = plugin_ids
@@ -685,11 +703,6 @@ class Chatbot:
             ),
             "history_and_training_disabled": self.disable_history,
         }
-        if model.startswith("gpt-4"):
-            data[
-                "arkose_token"
-            ] = f"{generate_random_hex()}|r=ap-southeast-1|meta=3|meta_width=300|metabgclr=transparent|metaiconclr=%23555555|guitextcolor=%23000000|pk=35536E1E-65B4-4D96-9D97-6ADB7EFF8147|at=40|sup=1|rid={random_int(1,99)}|ag=101|cdn_url=https%3A%2F%2Ftcr9i.chat.openai.com%2Fcdn%2Ffc|lurl=https%3A%2F%2Faudio-ap-southeast-1.arkoselabs.com|surl=https%3A%2F%2Ftcr9i.chat.openai.com|smurl=https%3A%2F%2Ftcr9i.chat.openai.com%2Fcdn%2Ffc%2Fassets%2Fstyle-manager"
-
         yield from self.__send_request(
             data,
             timeout=timeout,
@@ -946,6 +959,18 @@ class AsyncChatbot(Chatbot):
         # overwrite inherited normal session with async
         self.session = AsyncClient(headers=self.session.headers)
 
+    async def __arkose_token(self) -> str:
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        }
+        form_data = "public_key=35536E1E-65B4-4D96-9D97-6ADB7EFF8147&site=https%3A%2F%2Fchat.openai.com&userbrowser=Mozilla%2F5.0%20(X11%3B%20Linux%20x86_64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F114.0.0.0%20Safari%2F537.36&capi_version=1.5.2&capi_mode=lightbox&style_theme=default&rnd=0.3649022041957759"
+        url = "https://tcr9i.chat.openai.com/fc/gt2/public_key/35536E1E-65B4-4D96-9D97-6ADB7EFF8147"
+        response = await self.session.post(url, data=form_data, headers=headers)
+        self.__check_response(response)
+        return response.json()["token"]
+
     async def __send_request(
         self,
         data: dict,
@@ -956,8 +981,9 @@ class AsyncChatbot(Chatbot):
         log.debug("Sending the payload")
 
         cid, pid = data["conversation_id"], data["parent_message_id"]
-        model, message = None, ""
-
+        message = ""
+        if data.get("model", "").startswith("gpt-4"):
+            data["arkose_token"] = await self.__arkose_token()
         self.conversation_id_prev_queue.append(cid)
         self.parent_id_prev_queue.append(pid)
         async with self.session.stream(
@@ -1036,6 +1062,7 @@ class AsyncChatbot(Chatbot):
             message = message.strip("\n")
             async for i in self.continue_write(
                 conversation_id=cid,
+                model=model,
                 timeout=timeout,
                 auto_continue=False,
             ):
@@ -1126,10 +1153,6 @@ class AsyncChatbot(Chatbot):
         plugin_ids = self.config.get("plugin_ids", []) or plugin_ids
         if len(plugin_ids) > 0 and not conversation_id:
             data["plugin_ids"] = plugin_ids
-        if model.startswith("gpt-4"):
-            data[
-                "arkose_token"
-            ] = f"{generate_random_hex()}|r=ap-southeast-1|meta=3|meta_width=300|metabgclr=transparent|metaiconclr=%23555555|guitextcolor=%23000000|pk=35536E1E-65B4-4D96-9D97-6ADB7EFF8147|at=40|sup=1|rid={random_int(1,99)}|ag=101|cdn_url=https%3A%2F%2Ftcr9i.chat.openai.com%2Fcdn%2Ffc|lurl=https%3A%2F%2Faudio-ap-southeast-1.arkoselabs.com|surl=https%3A%2F%2Ftcr9i.chat.openai.com|smurl=https%3A%2F%2Ftcr9i.chat.openai.com%2Fcdn%2Ffc%2Fassets%2Fstyle-manager"
         async for msg in self.__send_request(
             data,
             timeout=timeout,
@@ -1255,11 +1278,6 @@ class AsyncChatbot(Chatbot):
             ),
             "history_and_training_disabled": self.disable_history,
         }
-        if model.startswith("gpt-4"):
-            data[
-                "arkose_token"
-            ] = f"{generate_random_hex()}|r=ap-southeast-1|meta=3|meta_width=300|metabgclr=transparent|metaiconclr=%23555555|guitextcolor=%23000000|pk=35536E1E-65B4-4D96-9D97-6ADB7EFF8147|at=40|sup=1|rid={random_int(1,99)}|ag=101|cdn_url=https%3A%2F%2Ftcr9i.chat.openai.com%2Fcdn%2Ffc|lurl=https%3A%2F%2Faudio-ap-southeast-1.arkoselabs.com|surl=https%3A%2F%2Ftcr9i.chat.openai.com|smurl=https%3A%2F%2Ftcr9i.chat.openai.com%2Fcdn%2Ffc%2Fassets%2Fstyle-manager"
-
         async for msg in self.__send_request(
             data=data,
             auto_continue=auto_continue,
@@ -1539,15 +1557,13 @@ def main(config: dict) -> NoReturn:
             print(f"{bcolors.OKGREEN + bcolors.BOLD}Chatbot: {bcolors.ENDC}")
             if chatbot.config.get("model") == "gpt-4-browsing":
                 print("Browsing takes a while, please wait...")
-            prev_text = ""
-            for data in chatbot.ask(prompt=prompt, auto_continue=True):
-                if data["recipient"] != "all":
-                    continue
-                result = data
-                message = data["message"][len(prev_text) :]
-                print(message, end="", flush=True)
-                prev_text = data["message"]
-            print(bcolors.ENDC)
+            with Live(Markdown(""), auto_refresh=False) as live:
+                for data in chatbot.ask(prompt=prompt, auto_continue=True):
+                    if data["recipient"] != "all":
+                        continue
+                    result = data
+                    message = data["message"]
+                    live.update(Markdown(message), refresh=True)
             print()
 
             if result.get("citations", False):
