@@ -154,8 +154,7 @@ class Chatbot:
         Get token count
         """
         if self.engine not in ENGINES:
-            raise NotImplementedError(f"Unsupported engine {self.engine}")
-
+            raise NotImplementedError(f"Engine {self.engine} is not supported. Select from {ENGINES}")
         tiktoken.model.MODEL_TO_ENCODING["gpt-4"] = "cl100k_base"
 
         encoding = tiktoken.encoding_for_model(self.engine)
@@ -195,11 +194,18 @@ class Chatbot:
         self.add_to_conversation(prompt, "user", convo_id=convo_id)
         self.__truncate_conversation(convo_id=convo_id)
         # Get response
+        if os.environ.get("API_URL") and os.environ.get("MODEL_NAME"):
+            # https://learn.microsoft.com/en-us/azure/cognitive-services/openai/chatgpt-quickstart?tabs=command-line&pivots=rest-api
+            url = os.environ.get("API_URL") + "openai/deployments/" + os.environ.get("MODEL_NAME") +"/chat/completions?api-version=2023-05-15"
+            headers = {"Content-Type": "application/json", "api-key": self.api_key}
+        else:
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {kwargs.get('api_key', self.api_key)}"}
         response = self.session.post(
-            os.environ.get("API_URL") or "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {kwargs.get('api_key', self.api_key)}"},
+            url,
+            headers=headers,
             json={
-                "model": model or self.engine,
+                "model": os.environ.get("MODEL_NAME") or model or self.engine,
                 "messages": self.conversation[convo_id] if pass_history else [prompt],
                 "stream": True,
                 # kwargs
@@ -737,3 +743,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nExiting...")
         sys.exit()
+        
