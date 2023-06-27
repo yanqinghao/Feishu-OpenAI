@@ -371,8 +371,8 @@ class Chatbot:
             proxy=self.config.get("proxy"),
         )
         log.debug("Using authenticator to get access token")
-        import pdb; pdb.set_trace()
-        self.set_access_token(auth.get_access_token())
+
+        self.set_access_token(auth.auth())
 
     @logger(is_timed=True)
     def __send_request(
