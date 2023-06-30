@@ -116,7 +116,9 @@ session = tls_client.Session(
 
 
 def get_arkose_token() -> str:
-    form_data = session.get(BASE_URL + "arkose").json().get("form")
+    resp = session.get(BASE_URL + "arkose").json()
+    form_data = resp.get("form")
+    referrer_hex = resp.get("hex")
     resp: dict = session.post(
         "https://tcr9i.chat.openai.com/fc/gt2/public_key/35536E1E-65B4-4D96-9D97-6ADB7EFF8147",
         data=form_data,
@@ -130,14 +132,17 @@ def get_arkose_token() -> str:
             "Origin": "https://tcr9i.chat.openai.com",
             "DNT": "1",
             "Connection": "keep-alive",
-            "Referer": "https://tcr9i.chat.openai.com/v2/1.5.2/enforcement.64b3a4e29686f93d52816249ecbf9857.html",
+            "Referer": f"https://tcr9i.chat.openai.com/v2/1.5.2/enforcement.{referrer_hex}.html",
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
             "TE": "trailers",
         },
     ).json()
-    return resp.get("token")
+    token: str = resp.get("token")
+    if "|rid=" not in token or "|sup=" not in token:
+        raise Exception("captcha triggered by arkose")
+    return token
 
 
 class Chatbot:
@@ -413,8 +418,15 @@ class Chatbot:
     ) -> Generator[dict, None, None]:
         log.debug("Sending the payload")
 
-        if data.get("model", "").startswith("gpt-4"):
-            data["arkose_token"] = get_arkose_token()
+        if (
+            data.get("model", "").startswith("gpt-4")
+            and not self.config.get("SERVER_SIDE_ARKOSE")
+            and not getenv("SERVER_SIDE_ARKOSE")
+        ):
+            try:
+                data["arkose_token"] = get_arkose_token()
+            except:
+                pass
 
         cid, pid = data["conversation_id"], data["parent_message_id"]
         message = ""
