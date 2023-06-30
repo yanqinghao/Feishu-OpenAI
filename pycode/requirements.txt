@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 openai>=0.26.5
 httpx[socks]
-OpenAIAuth>=1.0.2
+OpenAIAuth>=2.0.0
 prompt-toolkit
 requests[socks]
 tiktoken>=0.3.0
