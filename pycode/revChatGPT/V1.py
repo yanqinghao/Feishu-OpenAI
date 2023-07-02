@@ -9,19 +9,29 @@ import contextlib
 import json
 import logging
 import secrets
+import subprocess
+import sys
 import time
 import uuid
 from functools import wraps
 from os import environ
 from os import getenv
+
+try:
+    from os import startfile
+except ImportError:
+    pass
 from pathlib import Path
 from typing import AsyncGenerator
 from typing import Generator
 from typing import NoReturn
+import tempfile
+
+# Import function type
+from typing import Callable as function
 
 import httpx
 import requests
-import tls_client
 from httpx import AsyncClient
 from OpenAIAuth import Auth0 as Authenticator
 from rich.live import Live
@@ -106,43 +116,85 @@ def logger(is_timed: bool):
     return decorator
 
 
-BASE_URL = environ.get("CHATGPT_BASE_URL") or "https://bypass.churchless.tech/"
+BASE_URL = environ.get("CHATGPT_BASE_URL", "https://bypass.churchless.tech/")
 
 bcolors = t.Colors()
 
-session = tls_client.Session(
-    client_identifier="firefox110", random_tls_extension_order=True
-)
+
+def captcha_solver(images: list[str], challenge_details: dict) -> int:
+    # Create tempfile
+    with tempfile.TemporaryDirectory() as tempdir:
+        filenames: list[Path] = []
+
+        for image in images:
+            filename = Path(tempdir, f"{time.time()}.jpeg")
+            with open(filename, "wb") as f:
+                f.write(base64.b64decode(image))
+            print(f"Saved captcha image to {filename}")
+            # If MacOS, open the image
+            if sys.platform == "darwin":
+                subprocess.call(["open", filename])
+            if sys.platform == "linux":
+                subprocess.call(["xdg-open", filename])
+            if sys.platform == "win32":
+                startfile(filename)
+            filenames.append(filename)
+
+        print(f'Captcha instructions: {challenge_details.get("instructions")}')
+        print(
+            "Developer instructions: The captcha images have an index starting from 0 from left to right",
+        )
+        print("Enter the index of the images that matches the captcha instructions:")
+        index = int(input())
+
+        return index
 
 
-def get_arkose_token() -> str:
-    resp = session.get(BASE_URL + "arkose").json()
-    form_data = resp.get("form")
-    referrer_hex = resp.get("hex")
-    resp: dict = session.post(
-        "https://tcr9i.chat.openai.com/fc/gt2/public_key/35536E1E-65B4-4D96-9D97-6ADB7EFF8147",
-        data=form_data,
-        headers={
-            "Host": "tcr9i.chat.openai.com",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:114.0) Gecko/20100101 Firefox/114.0",
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Origin": "https://tcr9i.chat.openai.com",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Referer": f"https://tcr9i.chat.openai.com/v2/1.5.2/enforcement.{referrer_hex}.html",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "TE": "trailers",
-        },
-    ).json()
-    token: str = resp.get("token")
-    if "|rid=" not in token or "|sup=" not in token:
-        raise Exception("captcha triggered by arkose")
-    return token
+CAPTCHA_URL = getenv("CAPTCHA_URL", "https://bypass.churchless.tech/captcha/")
+
+
+def get_arkose_token(
+    download_images: bool = True,
+    solver: function = captcha_solver,
+) -> str:
+    """
+    The solver function should take in a list of images in base64 and a dict of challenge details
+    and return the index of the image that matches the challenge details
+
+    Challenge details:
+        game_type: str - Audio or Image
+        instructions: str - Instructions for the captcha
+        URLs: list[str] - URLs of the images or audio files
+    """
+    resp = requests.get(
+        (CAPTCHA_URL + "start?download_images=true")
+        if download_images
+        else CAPTCHA_URL + "start",
+    )
+    resp_json: dict = resp.json()
+    if resp.status_code == 200:
+        return resp_json.get("token")
+    if resp.status_code != 511:
+        raise Exception(resp_json.get("error", "Unknown error"))
+
+    if resp_json.get("status") != "captcha":
+        raise Exception("unknown error")
+
+    challenge_details: dict = resp_json.get("session", {}).get("concise_challenge")
+    if not challenge_details:
+        raise Exception("missing details")
+
+    images: list[str] = resp_json.get("images")
+
+    index = solver(images, challenge_details)
+
+    resp = requests.post(
+        CAPTCHA_URL + "verify",
+        json={"session": resp_json.get("session"), "index": index},
+    )
+    if resp.status_code != 200:
+        raise Exception("Failed to verify captcha")
+    return resp_json.get("token")
 
 
 class Chatbot:
@@ -158,6 +210,8 @@ class Chatbot:
         parent_id: str | None = None,
         lazy_loading: bool = True,
         base_url: str | None = None,
+        captcha_solver: function = captcha_solver,
+        captcha_download_images: bool = True,
     ) -> None:
         """Initialize a chatbot
 
@@ -172,7 +226,10 @@ class Chatbot:
                 More details on these are available at https://github.com/acheong08/ChatGPT#configuration
             conversation_id (str | None, optional): Id of the conversation to continue on. Defaults to None.
             parent_id (str | None, optional): Id of the previous response message to continue on. Defaults to None.
-            session_client (_type_, optional): _description_. Defaults to None.
+            lazy_loading (bool, optional): Whether to load only the active conversation. Defaults to True.
+            base_url (str | None, optional): Base URL of the ChatGPT server. Defaults to None.
+            captcha_solver (function, optional): Function to solve captcha. Defaults to captcha_solver.
+            captcha_download_images (bool, optional): Whether to download captcha images. Defaults to True.
 
         Raises:
             Exception: _description_
@@ -253,6 +310,8 @@ class Chatbot:
             print("Setting PUID (You are a Plus user!): " + puid)
         except:
             pass
+        self.captcha_solver = captcha_solver
+        self.captcha_download_images = captcha_download_images
 
     @logger(is_timed=True)
     def __check_credentials(self) -> None:
@@ -424,9 +483,13 @@ class Chatbot:
             and not getenv("SERVER_SIDE_ARKOSE")
         ):
             try:
-                data["arkose_token"] = get_arkose_token()
-            except:
-                pass
+                data["arkose_token"] = get_arkose_token(
+                    self.captcha_download_images,
+                    self.captcha_solver,
+                )
+            except Exception as e:
+                print(e)
+                raise e
 
         cid, pid = data["conversation_id"], data["parent_message_id"]
         message = ""

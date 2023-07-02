@@ -155,7 +155,7 @@ class Chatbot:
         """
         if self.engine not in ENGINES:
             raise NotImplementedError(
-                f"Engine {self.engine} is not supported. Select from {ENGINES}"
+                f"Engine {self.engine} is not supported. Select from {ENGINES}",
             )
         tiktoken.model.MODEL_TO_ENCODING["gpt-4"] = "cl100k_base"
 
@@ -231,7 +231,10 @@ class Chatbot:
                 ),
                 "n": kwargs.get("n", self.reply_count),
                 "user": role,
-                "max_tokens": self.get_max_tokens(convo_id=convo_id),
+                "max_tokens": min(
+                    self.get_max_tokens(convo_id=convo_id),
+                    kwargs.get("max_tokens", self.max_tokens),
+                ),
             },
             timeout=kwargs.get("timeout", self.timeout),
             stream=True,
@@ -303,7 +306,10 @@ class Chatbot:
                 ),
                 "n": kwargs.get("n", self.reply_count),
                 "user": role,
-                "max_tokens": self.get_max_tokens(convo_id=convo_id),
+                "max_tokens": min(
+                    self.get_max_tokens(convo_id=convo_id),
+                    kwargs.get("max_tokens", self.max_tokens),
+                ),
             },
             timeout=kwargs.get("timeout", self.timeout),
         ) as response:
