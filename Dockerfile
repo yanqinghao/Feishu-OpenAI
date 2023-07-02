@@ -23,7 +23,7 @@ COPY ./utils/start.sh /app/start.sh
 RUN chmod +x /usr/bin/xray && \
     chmod +x /app/feishu_chatgpt && \
     chmod +x /app/start.sh && \
-    pip config set global.index-url https://pypi.mirrors.ustc.edu.cn/simple && \
+    pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
     pip install --upgrade pip && \
     pip install -r requirements.txt && \
     sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list && \
