@@ -7,6 +7,3 @@ prompt-toolkit
 requests[socks]
 tiktoken>=0.3.0
 rich
-async_tio
-curl_cffi
-tls_client>=0.2.1
