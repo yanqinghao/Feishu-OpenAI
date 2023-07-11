@@ -31,7 +31,9 @@ async def updateAccessToken():
     while True:
         await asyncio.sleep(1 * 24 * 60 * 60)
         print("AccessToken自动更新中", flush=True)
+        chatbot.config["model"] = "gpt-4"
         chatbot.__check_credentials()
+        chatbot.config["model"] = "text-davinci-002-render-sha"
         print("AccessToken自动更新完成", flush=True)
 
 async def updateModel():
@@ -47,6 +49,8 @@ openai.proxy = {
 }
 
 app = FastAPI()
+
+chatbot.config["model"] = "text-davinci-002-render-sha"
 
 @app.on_event("startup")
 async def startup_event():

@@ -9,7 +9,7 @@
 
 # RUN CGO_ENABLED=0 GOOS=linux go build -ldflags '-w -s' -o feishu_chatgpt
 
-FROM python:3.11-slim-bullseye
+FROM python:3.10-slim-bullseye
 
 WORKDIR /app
 
